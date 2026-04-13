@@ -1,0 +1,11 @@
+{
+  "name": "web-search",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "web-search": "./index.js"
+  },
+  "dependencies": {
+    "node-html-parser": "^7.1.0"
+  }
+}

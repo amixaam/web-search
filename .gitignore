@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Lock files (optional - uncomment if you don't want to track them)
+# bun.lock
+# package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local

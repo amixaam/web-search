@@ -1,6 +1,6 @@
 ---
 name: web-search
-description: "Search the web using a local SearXNG instance for real-time information, images, and news. Supports both broad search and deep single-URL content extraction."
+description: "Web search, images, and news via SearXNG. Also extracts full page content from any URL."
 metadata: {"openclaw": {"emoji": "🔍", "requires": {"bins": ["bun"]}, "always": true}}
 user-invocable: true
 ---
@@ -9,7 +9,7 @@ user-invocable: true
 
 Use this tool whenever you need current information — news, documentation, prices, recent events, or anything that changes over time or is unlikely to be in your training data.
 
-The tool has two modes: **search** (broad, returns multiple results) and **deep** (focused, extracts full content from one URL).
+The tool has two modes: **search** (broad, returns multiple results) and **fetch** (focused, extracts full content from one URL).
 
 ## Modes
 
@@ -20,8 +20,9 @@ Returns a ranked list of results from SearXNG.
 **Parameters:**
 
 - `query` (required): The search terms or question.
-- `quantity` (optional): Number of results to return, 1–20. Default: 3.
+- `quantity` (optional): Number of results to return, 1–20. Default: 4.
 - `category` (optional): `"general"` | `"images"` | `"news"`. Default: `"general"`.
+- `time_range` (optional): `"day"` | `"week"` | `"month"` | `"year"`. Filters results by recency.
 
 **Examples:**
 
@@ -30,6 +31,7 @@ web-search '{"query": "MacBook Air M3 benchmarks"}'
 web-search '{"query": "latest React 19 release notes", "quantity": 5}'
 web-search '{"query": "northern lights tonight", "category": "news"}'
 web-search '{"query": "rust crab logo", "category": "images"}'
+web-search '{"query": "jamie paige newest release", "time_range": "month"}'
 ```
 
 **Output** — a JSON array, one object per result:
@@ -48,7 +50,7 @@ For `images`, `url` is the direct image URL and `source_page` (when present) is 
 
 ---
 
-### Deep mode
+### Fetch mode
 
 Fetches and extracts the full text content of a single URL. Use this to read documentation, articles, or any page in full after finding it via search.
 
@@ -56,17 +58,17 @@ The tool tries strategies in order, most LLM-friendly first:
 
 1. `/llms.txt` or `/llms-full.txt` at the site root — clean, structured text
 2. `Accept: text/markdown` header — Markdown if the server supports it
-3. Full HTML scrape — strips scripts, nav, footer, and collapses whitespace
+3. DOM-based HTML extraction — outputs clean, LLM-optimized markdown
 
 **Parameter:**
 
-- `deep` (required): The full URL to fetch.
+- `fetch` (required): The full URL to fetch.
 
 **Examples:**
 
 ```
-web-search '{"deep": "https://tailwindcss.com/docs/dark-mode"}'
-web-search '{"deep": "https://docs.ollama.com/"}'
+web-search '{"fetch": "https://tailwindcss.com/docs/dark-mode"}'
+web-search '{"fetch": "https://docs.ollama.com/"}'
 ```
 
 **Output** — plain text prefixed with source metadata:
@@ -75,7 +77,7 @@ web-search '{"deep": "https://docs.ollama.com/"}'
 [source: llms.txt | markdown | html]
 [url: https://...]
 
-<full page content>
+<full page content as clean markdown>
 ```
 
 ---
@@ -85,16 +87,16 @@ web-search '{"deep": "https://docs.ollama.com/"}'
 | Situation | Mode |
 |---|---|
 | You need to find relevant pages on a topic | `query` |
-| You have a URL and need the full content | `deep` |
-| You found a promising result and need more than the snippet | `deep` on that URL |
+| You have a URL and need the full content | `fetch` |
+| You found a promising result and need more than the snippet | `fetch` on that URL |
 | You need recent news or images | `query` with `category` |
+| You need results from a specific time period | `query` with `time_range` |
 
 **Typical pattern — search then read:**
 
 ```
 1. web-search '{"query": "Tailwind dark mode"}'
    → pick the best URL from results
-2. web-search '{"deep": "https://tailwindcss.com/docs/dark-mode"}'
+2. web-search '{"fetch": "https://tailwindcss.com/docs/dark-mode"}'
    → read the full documentation page
 ```
-
