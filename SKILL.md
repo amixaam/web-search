@@ -1,102 +1,90 @@
 ---
 name: web-search
-description: "Web search, images, and news via SearXNG. Also extracts full page content from any URL."
-metadata: {"openclaw": {"emoji": "🔍", "requires": {"bins": ["bun"]}, "always": true}}
+description: "Web search via SearXNG and full-page markdown extraction."
 user-invocable: true
 ---
 
-# Web Search
+# Web Search & Fetch
 
-Use this tool whenever you need current information — news, documentation, prices, recent events, or anything that changes over time or is unlikely to be in your training data.
+Use **search** to find URLs and **fetch** to read full content. Always prioritize fresh data for time-sensitive queries.
 
-The tool has two modes: **search** (broad, returns multiple results) and **fetch** (focused, extracts full content from one URL).
+## Usage
 
-## Modes
+You can call the `web-search` command directly from the shell. It accepts a single JSON string as its only argument.
 
-### Search mode
+### `search` Mode
+- `queries`: Single string or array of strings. Each string is searched in parallel.
+- `category`: `"general"` (default), `"news"`, `"images"`.
+- `time_range`: `"day"`, `"week"`, `"month"`, `"year"`. (Use sparingly; best for breaking news).
+- `quantity`: 1–20 (default: 4). Applies to each query.
 
-Returns a ranked list of results from SearXNG.
-
-**Parameters:**
-
-- `query` (required): The search terms or question.
-- `quantity` (optional): Number of results to return, 1–20. Default: 4.
-- `category` (optional): `"general"` | `"images"` | `"news"`. Default: `"general"`.
-- `time_range` (optional): `"day"` | `"week"` | `"month"` | `"year"`. Filters results by recency.
-
-**Examples:**
-
-```
-web-search '{"query": "MacBook Air M3 benchmarks"}'
-web-search '{"query": "latest React 19 release notes", "quantity": 5}'
-web-search '{"query": "northern lights tonight", "category": "news"}'
-web-search '{"query": "rust crab logo", "category": "images"}'
-web-search '{"query": "jamie paige newest release", "time_range": "month"}'
+**Example (single query):**
+```bash
+web-search '{"queries": "Llama 4 architecture paper", "quantity": 5}'
 ```
 
-**Output** — a JSON array, one object per result:
+**Example (parallel queries):**
+```bash
+web-search '{"queries": ["Llama 4 architecture paper", "Llama 4 site:arxiv.org", "Llama 4 benchmark results"]}'
+```
+
+### `fetch` Mode
+- `url`: The full address to extract content from.
+- `max_length`: Character limit (default: 15,000).
+
+**Example:**
+```bash
+web-search '{"fetch": "https://example.com"}'
+```
+
+---
+
+## Core Best Practices
+
+### 1. The "Search-then-Read" Loop
+Snippet text is often SEO garbage. Use `search` to identify the best URL, then immediately use `fetch` to get the full, clean Markdown content for accurate analysis.
+
+### 2. Parallel Queries for Multi-Perspective Searches
+When researching a topic, run multiple variations in parallel for comprehensive coverage:
+```bash
+web-search '{"queries": [
+  "RTX 5090 specs",
+  "RTX 5090 release date",
+  "RTX 5090 price comparison"
+]}'
+```
+
+### 3. Date & Context Injection
+Always include the current date in your query and use the `time_range` parameter only for breaking news or actively changing topics.
+- **Bad:** `web-search '{"queries": "iPhone 17 Pro retail price", "time_range": "month"}'`
+- **Good:** `web-search '{"queries": "iPhone 17 Pro retail price April 2026"}'`
+
+### 4. Disambiguation by Exclusion
+Use `-` to prune noise from common names or overlapping topics.
+- **Example:** `web-search '{"queries": "Horizon game -Forbidden -Zero -Dawn"}'`
+
+### 5. Target the "Source of Truth"
+| Target | Search Strategy |
+|---|---|
+| **Breaking News** | Use `category: "news"` + `time_range: "day"` |
+| **Code/Tech** | Append `site:github.com` or `site:docs.rs` |
+| **Music/Indie** | Append `site:bandcamp.com` or `site:bluesky.social` |
+| **Academic** | Append `site:edu` or `site:arxiv.org` |
+
+---
+
+## Examples
 
 ```json
-[
-  {
-    "title": "Page title",
-    "url": "https://...",
-    "content": "Short snippet (up to 600 chars)"
-  }
-]
-```
+// Find recent documentation
+web-search '{"queries": "Next.js 15 partial prerendering docs"}'
 
-For `images`, `url` is the direct image URL and `source_page` (when present) is the originating webpage.
+// Get specific price data
+web-search '{"queries": "Nvidia RTX 5090 MSRP", "category": "news", "time_range": "month"}'
 
----
+// Deep read of a specific article
+web-search '{"fetch": "https://www.nature.com/articles/s41586-024-00000-0"}'
 
-### Fetch mode
-
-Fetches and extracts the full text content of a single URL. Use this to read documentation, articles, or any page in full after finding it via search.
-
-The tool tries strategies in order, most LLM-friendly first:
-
-1. `/llms.txt` or `/llms-full.txt` at the site root — clean, structured text
-2. `Accept: text/markdown` header — Markdown if the server supports it
-3. DOM-based HTML extraction — outputs clean, LLM-optimized markdown
-
-**Parameter:**
-
-- `fetch` (required): The full URL to fetch.
-
-**Examples:**
-
-```
-web-search '{"fetch": "https://tailwindcss.com/docs/dark-mode"}'
-web-search '{"fetch": "https://docs.ollama.com/"}'
-```
-
-**Output** — plain text prefixed with source metadata:
-
-```
-[source: llms.txt | markdown | html]
-[url: https://...]
-
-<full page content as clean markdown>
-```
-
----
-
-## When to use which mode
-
-| Situation | Mode |
-|---|---|
-| You need to find relevant pages on a topic | `query` |
-| You have a URL and need the full content | `fetch` |
-| You found a promising result and need more than the snippet | `fetch` on that URL |
-| You need recent news or images | `query` with `category` |
-| You need results from a specific time period | `query` with `time_range` |
-
-**Typical pattern — search then read:**
-
-```
-1. web-search '{"query": "Tailwind dark mode"}'
-   → pick the best URL from results
-2. web-search '{"fetch": "https://tailwindcss.com/docs/dark-mode"}'
-   → read the full documentation page
+// Research a topic from multiple angles (parallel)
+web-search '{"queries": ["React 19 new features", "React 19 release notes", "React 19 migration guide"]}'
 ```

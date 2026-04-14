@@ -4,6 +4,8 @@
  * Categories: "general", "images", "news"
  * Fetch mode: extract full text content from a single URL
  *   - Checks /llms.txt and Accept: text/markdown before falling back to DOM extraction
+ *   - Uses Mozilla Readability for clean content extraction
+ *   - Truncates output to protect LLM context window
  */
 
 import { htmlToMarkdown } from "./extract.js";
@@ -11,13 +13,14 @@ import { htmlToMarkdown } from "./extract.js";
 const SEARXNG_URL = "https://search.amixam.net";
 const MAX_QUANTITY = 20;
 const MAX_PAGES = 3;
+const DEFAULT_MAX_LENGTH = 15_000;
 
 const BROWSER_HEADERS = {
   "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   Accept: "text/html,application/xhtml+xml",
 };
 
-// --- SearXNG search ---
+// ── SearXNG search ─────────────────────────────────────────────────────────────
 
 async function fetchPage(query, category, page = 1, timeRange) {
   const url = new URL(`${SEARXNG_URL}/search`);
@@ -39,7 +42,7 @@ async function fetchPage(query, category, page = 1, timeRange) {
   }
 }
 
-// --- Deep dive ---
+// ── Deep dive ──────────────────────────────────────────────────────────────────
 
 async function tryLlmsTxt(baseUrl) {
   for (const path of ["/llms.txt", "/llms-full.txt"]) {
@@ -82,38 +85,69 @@ async function tryMarkdownAccept(url) {
   return null;
 }
 
-async function scrapeHtml(url) {
+async function scrapeHtml(url, maxLength = DEFAULT_MAX_LENGTH) {
   const res = await fetch(url, { headers: BROWSER_HEADERS });
   if (!res.ok) return { error: `HTTP ${res.status}: ${res.statusText}` };
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("text/html")) return { error: `Unsupported content type: ${ct}` };
   const html = await res.text();
-  const content = htmlToMarkdown(html);
-  return content ? { source: "html", content } : { error: "No extractable content found" };
+  const result = htmlToMarkdown(html, { useReadability: true, maxLength });
+  return result;
 }
 
-async function deepFetch(targetUrl) {
+async function deepFetch(targetUrl, maxLength = DEFAULT_MAX_LENGTH) {
   let parsed;
   try { parsed = new URL(targetUrl); }
   catch { return { url: targetUrl, error: "Invalid URL" }; }
 
-  // Try strategies in order, most LLM-friendly first
   const llmsTxt = await tryLlmsTxt(parsed.origin);
   if (llmsTxt) return { url: targetUrl, ...llmsTxt };
 
   const markdown = await tryMarkdownAccept(targetUrl);
   if (markdown) return { url: targetUrl, ...markdown };
 
-  // Fallback: DOM-based extraction
   try {
-    const result = await scrapeHtml(targetUrl);
-    return { url: targetUrl, ...result };
+    const result = await scrapeHtml(targetUrl, maxLength);
+    if (result.error) return { url: targetUrl, ...result };
+    return {
+      url: targetUrl,
+      source: result.extractionMethod,
+      content: result.content,
+      truncated: result.truncated,
+      charCount: result.charCount,
+    };
   } catch (err) {
     return { url: targetUrl, error: err.message };
   }
 }
 
-// --- Main ---
+// ── Search helper ─────────────────────────────────────────────────────────────
+
+async function searchQuery(query, quantity, category, timeRange) {
+  const clampedQuantity = Math.min(Math.max(1, quantity), MAX_QUANTITY);
+  let allResults = [];
+  let page = 1;
+
+  while (allResults.length < clampedQuantity && page <= MAX_PAGES) {
+    const results = await fetchPage(query, category, page, timeRange);
+    if (results.length === 0) break;
+    allResults.push(...results);
+    page++;
+  }
+
+  return allResults.slice(0, clampedQuantity).map((r) => {
+    const isImage = category === "images" || !!r.img_src;
+    const displayUrl = isImage ? (r.img_src || r.thumbnail_src || r.url) : r.url;
+    return {
+      title: r.title,
+      url: displayUrl,
+      ...(isImage && r.url !== displayUrl ? { source_page: r.url } : {}),
+      content: (r.content || r.snippet || "No description available").substring(0, 600),
+    };
+  });
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   const arg = process.argv[2];
@@ -129,20 +163,22 @@ async function main() {
     process.exit(1);
   }
 
-  // Fetch mode — full content from a single URL
-  const fetchUrl = params.fetch || params.deep; // "deep" kept for backward compat
+  // ── FETCH MODE ─────────────────────────────────────────────────────────────
+  const fetchUrl = params.fetch || params.deep;
   if (fetchUrl) {
-    const result = await deepFetch(fetchUrl);
+    const maxLen = params.max_length ?? DEFAULT_MAX_LENGTH;
+    const result = await deepFetch(fetchUrl, maxLen);
     if (result.error) {
       process.stderr.write(`[Error] ${result.url}: ${result.error}\n`);
       process.exit(1);
     }
-    process.stdout.write(`[source: ${result.source}]\n[url: ${result.url}]\n\n${result.content}\n`);
+    const truncatedNote = result.truncated ? `\n\n[Output truncated to ~${maxLen} chars from ${result.charCount}]` : "";
+    process.stdout.write(`[source: ${result.source}]\n[url: ${result.url}]${truncatedNote}\n\n${result.content}\n`);
     return;
   }
 
-  // Search mode
-  const { query, quantity = 4, category = "general", time_range } = params;
+  // ── SEARCH MODE ────────────────────────────────────────────────────────────
+  const { query, queries, quantity = 4, category = "general", time_range } = params;
   const validCategories = ["general", "images", "news"];
   if (!validCategories.includes(category)) {
     console.error(JSON.stringify({
@@ -151,29 +187,25 @@ async function main() {
     process.exit(1);
   }
 
-  const clampedQuantity = Math.min(Math.max(1, quantity), MAX_QUANTITY);
-  let allResults = [];
-  let page = 1;
-
-  while (allResults.length < clampedQuantity && page <= MAX_PAGES) {
-    const results = await fetchPage(query, category, page, time_range);
-    if (results.length === 0) break;
-    allResults.push(...results);
-    page++;
+  // Normalize to array (support both single string and array of strings)
+  const rawQueries = queries ?? query;
+  const searchQueries = Array.isArray(rawQueries) ? rawQueries : (rawQueries ? [rawQueries] : []);
+  if (searchQueries.length === 0) {
+    console.error(JSON.stringify({ error: "No query or queries provided" }));
+    process.exit(1);
   }
 
-  const finalResults = allResults.slice(0, clampedQuantity).map((r) => {
-    const isImage = category === "images" || !!r.img_src;
-    const displayUrl = isImage ? (r.img_src || r.thumbnail_src || r.url) : r.url;
-    return {
-      title: r.title,
-      url: displayUrl,
-      ...(isImage && r.url !== displayUrl ? { source_page: r.url } : {}),
-      content: (r.content || r.snippet || "No description available").substring(0, 600),
-    };
-  });
+  // Parallel execution
+  const results = await Promise.all(
+    searchQueries.map((q) => searchQuery(q, quantity, category, time_range))
+  );
 
-  console.log(JSON.stringify(finalResults, null, 2));
+  const output = {
+    queries: searchQueries,
+    results,
+  };
+
+  console.log(JSON.stringify(output, null, 2));
 }
 
 main();

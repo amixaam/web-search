@@ -6,6 +6,8 @@
     "web-search": "./index.js"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^29.0.2",
     "node-html-parser": "^7.1.0"
   }
 }
