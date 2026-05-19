@@ -8,6 +8,14 @@ user-invocable: true
 
 Use **search** to find URLs and **fetch** to read full content. Always prioritize fresh data for time-sensitive queries.
 
+## Setup
+
+If `web-search` is not found on PATH, link it first:
+
+```bash
+cd ~/.pi/agent/git/github.com/amixaam/web-search && npm link
+```
+
 ## Usage
 
 You can call the `web-search` command directly from the shell. It accepts a single JSON string as its only argument.

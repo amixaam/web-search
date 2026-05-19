@@ -21,6 +21,15 @@ npm link
 # It's now available via /skill:web-search or by asking pi to search the web.
 ```
 
+**Set your SearXNG URL** (search won't work without it):
+
+```bash
+export SEARXNG_URL="https://your-searxng-instance"
+```
+
+Add it to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) so it persists.
+Or just ask pi: *"set SEARXNG_URL to my SearXNG instance in my shell profile"*.
+
 Pi clones the repo, runs `npm install`, and picks up the skill from `SKILL.md`. Updates happen via `pi update`.
 
 ### Manual install (local clone)
