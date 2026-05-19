@@ -7,7 +7,7 @@
     "web-search": "./index.js"
   },
   "pi": {
-    "extensions": ["./src/extension"],
+    "extensions": ["./src/web-search"],
     "skills": ["./SKILL.md"]
   },
   "scripts": {
