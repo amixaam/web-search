@@ -13,6 +13,10 @@ Search the web via a SearXNG instance. Works as both a standalone CLI tool and a
 # Install from GitHub as a pi package (recommended)
 pi install https://github.com/amixaam/web-search.git
 
+# Link the CLI so `web-search` is on your PATH
+cd ~/.pi/agent/git/github.com/amixaam/web-search
+npm link
+
 # That's it — pi discovers the skill automatically.
 # It's now available via /skill:web-search or by asking pi to search the web.
 ```
@@ -25,6 +29,7 @@ Pi clones the repo, runs `npm install`, and picks up the skill from `SKILL.md`. 
 git clone https://github.com/amixaam/web-search.git ~/skills/web-search
 cd ~/skills/web-search
 npm install
+npm link
 
 # Register with pi
 pi install ~/skills/web-search
