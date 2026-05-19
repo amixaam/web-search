@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 
-# Lock files (optional - uncomment if you don't want to track them)
-# bun.lock
+# Lock files — tracked for reproducible installs
 # package-lock.json
 
 # OS files
@@ -24,3 +23,6 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Python virtualenv (stale artifacts)
+.venv/

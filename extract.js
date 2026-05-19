@@ -10,11 +10,21 @@ import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 
 const NOISE_TAGS = new Set([
-  'script', 'style', 'noscript', 'iframe', 'svg', 'link',
+  'script', 'style', 'noscript', 'iframe', 'svg', 'path', 'link',
   'meta', 'nav', 'header', 'footer', 'aside', 'button',
   'form', 'input', 'select', 'textarea', 'label',
   'canvas', 'video', 'audio', 'source', 'track', 'embed',
 ]);
+
+// Inline-level tags — passthrough, their children contribute inline text
+const INLINE_TAGS = new Set(
+  'sub sup abbr cite var time data del ins mark kbd q u small span strong b em i code a s'.split(' ')
+);
+
+// Block-level container tags — recurse into children
+const BLOCK_CONTAINER_TAGS = new Set(
+  'div section article main aside details summary figure'.split(' ')
+);
 
 // Expanded noise patterns — catches more sidebar/nav/class noise
 const NOISE_RE = /menu|sidebar|hamburger|ticker|breadcrumb|cookie|popup|modal|overlay|toolbar|chat-widget|social-share|fake-terminal|separator|sr-only|visually-hidden|ft-hint|nav-|menu-|sidebar-|toc|table-of-contents|related-?posts?|author-|byline|comment-|reply-|share-|rating|ad-|advertisement|promo|banner|skip|dropdown|accordion|tab-|pager|pagination|skip-link|back-to-top/i;
@@ -67,7 +77,11 @@ function findContentNode(root) {
     if (el?.textContent?.trim().length > 200) {
       const cls = el.getAttribute('class') || '';
       const id = el.getAttribute('id') || '';
-      if (!NOISE_RE.test(cls) && !NOISE_RE.test(id)) return el;
+      if (!NOISE_RE.test(cls) && !NOISE_RE.test(id)) {
+        // Validate word-boundary match (avoid false positives like "particle-board")
+        const target = sel.match(/[a-z]{3,}/i)?.[0] || '';
+        if (!target || new RegExp('\\b' + target + '\\b', 'i').test(cls + ' ' + id)) return el;
+      }
     }
   }
 
@@ -110,8 +124,24 @@ function collectInline(children) {
     if (t === 'strong' || t === 'b') return '**' + ws(collectInline(c.childNodes)) + '**';
     if (t === 'em' || t === 'i') return '*' + ws(collectInline(c.childNodes)) + '*';
     if (t === 'br') return '  ';  // two spaces = hard line break in markdown
+    if (t === 'img') {
+      const alt = ws(c.getAttribute('alt') || '');
+      const src = c.getAttribute('src') || '';
+      return src ? '![' + (alt || 'image') + '](' + src + ')' : '';
+    }
+    if (t === 'del' || t === 's') return '~~' + ws(collectInline(c.childNodes)) + '~~';
+    if (t === 'sup') return '<sup>' + ws(collectInline(c.childNodes)) + '</sup>';
+    if (t === 'sub') return '<sub>' + ws(collectInline(c.childNodes)) + '</sub>';
+    if (t === 'abbr') {
+      const title = ws(c.getAttribute('title') || '');
+      const txt = ws(collectInline(c.childNodes));
+      return title ? txt + ' (' + title + ')' : txt;
+    }
+    if (t === 'kbd') {
+      return '`' + ws(collectInline(c.childNodes)) + '`';
+    }
     // passthrough inline elements
-    if ('sub sup abbr cite var time data del ins mark kbd q u small span strong b em i code a'.split(' ').includes(t)) {
+    if (INLINE_TAGS.has(t)) {
       return collectInline(c.childNodes || []);
     }
     return '';
@@ -125,6 +155,10 @@ function parseTable(tableNode) {
   const rows = [];
   const headers = [];
   let hasHeader = false;
+  let caption = '';
+
+  const captionEl = tableNode.querySelector('caption');
+  if (captionEl) caption = ws(collectInline(captionEl.childNodes));
 
   const tbody = tableNode.querySelector('tbody') || tableNode;
   const trs = (tbody.querySelectorAll('tr'));
@@ -179,7 +213,8 @@ function parseTable(tableNode) {
     lines.push('| ' + normalized.join(' | ') + ' |');
   }
 
-  return lines.join('\n');
+  const tableMd = lines.join('\n');
+  return caption ? '**' + caption + '**\n\n' + tableMd : tableMd;
 }
 
 // ── Main converter ─────────────────────────────────────────────────────────────
@@ -192,7 +227,7 @@ function toMarkdown(node, depth = 0) {
 
   if (node.nodeType === 3) {
     // node-html-parser reports DOCTYPE as text node — filter it out
-    const text = (node.text || '').replace(/\r?\n/g, ' ').trim();
+    const text = (node.text || '').replace(/\r?\n/g, ' ');
     if (/^<!doctype/i.test(text) || /^<!dtd/i.test(text)) return '';
     return text;
   }
@@ -200,7 +235,7 @@ function toMarkdown(node, depth = 0) {
   const tag = (node.tagName || '').toLowerCase();
 
   // Skip noise nodes
-  if (NOISE_TAGS.has(tag) || tag === 'svg' || tag === 'path') return '';
+  if (NOISE_TAGS.has(tag)) return '';
   if (isNoiseNode(node)) return '';
 
   // Headings
@@ -225,9 +260,7 @@ function toMarkdown(node, depth = 0) {
     const rawClass = codeEl.getAttribute('class') || '';
     // Extract language from class: language-js, lang-js, highlight-js, etc.
     const lang = rawClass.match(/(?:^| )lang(?:uage)?[-:]?(\b[a-z0-9_.-]+\b)/i)?.[1] ?? '';
-    let code = collectRaw(codeEl.childNodes || []);
-    // Strip any inner HTML tags
-    code = code.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
+    let code = (codeEl.textContent || '').trim();
     return code ? '\n```' + lang + '\n' + code + '\n```\n' : '';
   }
 
@@ -267,25 +300,21 @@ function toMarkdown(node, depth = 0) {
     const parent = node.parentNode;
     const isOrdered = parent?.tagName?.toLowerCase() === 'ol';
     const marker = isOrdered ? '1.' : '-';
-    const parts = (node.childNodes || []).map(c => toMarkdown(c, depth + 1));
-    let txt = parts.join('').replace(/\n+/g, ' ').replace(/  +/g, ' ').trim();
 
-    // If the <li> contains nested <ul>/<ol>, preserve them
-    const nested = (node.childNodes || []).map(c => toMarkdown(c, depth + 1)).join('');
+    // Check if this <li> contains a nested list (ul/ol child)
+    const hasNestedList = (node.childNodes || []).some(
+      c => c.tagName && (c.tagName.toLowerCase() === 'ul' || c.tagName.toLowerCase() === 'ol')
+    );
 
-    // Check if we have nested list content after the first text part
-    const firstLineEnd = nested.indexOf('\n');
-    if (firstLineEnd !== -1) {
-      // Has nested structure — use just the marker, let nested content flow
-      txt = '';
-    }
-
-    if (txt) {
-      return marker + ' ' + txt + '\n';
-    } else {
-      // Just nested content, no leading text
+    if (hasNestedList) {
+      // Render with nested structure preserved
+      const nested = (node.childNodes || []).map(c => toMarkdown(c, depth + 1)).join('');
       return nested;
     }
+
+    // Simple li — collect inline text
+    const txt = ws(collectInline(node.childNodes));
+    return txt ? marker + ' ' + txt + '\n' : '';
   }
 
   // Definition lists
@@ -351,27 +380,10 @@ function toMarkdown(node, depth = 0) {
   }
 
   // Block containers — recurse and normalize spacing
-  if ('div section article main aside details summary figure'.split(' ').includes(tag)) {
-    // When inside a top-level content container, skip noise elements
-    if (depth === 0 && ('nav aside footer'.split(' ').includes(tag))) {
-      const children = node.childNodes || [];
-      const nonNoise = children.filter(c => {
-        const t = (c.tagName || '').toLowerCase();
-        if (NOISE_TAGS.has(t)) return false;
-        const cls = c.getAttribute('class') || '';
-        const id = c.getAttribute('id') || '';
-        // Skip nav elements that look like TOC (lots of links)
-        if (t === 'nav' && (cls.includes('toc') || id.includes('toc') || c.querySelectorAll('a').length > 5)) return false;
-        return true;
-      });
-      if (nonNoise.length === 0) return '';
-    }
+  if (BLOCK_CONTAINER_TAGS.has(tag)) {
     const inner = (node.childNodes || []).map(c => toMarkdown(c, depth)).join('').replace(/\n{3,}/g, '\n\n').trim();
     return inner ? '\n' + inner + '\n' : '';
   }
-
-  // HR inside other elements
-  if (tag === 'hr') return '\n---\n';
 
   // Default: recurse
   return (node.childNodes || []).map(c => toMarkdown(c, depth)).join('');
@@ -435,6 +447,34 @@ function extractViaReadability(html, baseUrl) {
 
 // ── Truncation helper ─────────────────────────────────────────────────────────
 
+/** Find a real sentence boundary in markdown text, skipping common abbreviations. */
+function findSentenceBoundary(markdown, maxPos) {
+  let pos = markdown.lastIndexOf('. ', maxPos);
+  const minPos = Math.floor(maxPos * 0.4);
+  while (pos > minPos) {
+    // Check if this ". " is part of an abbreviation (Dr. Mr. e.g. etc.)
+    const before = markdown.slice(Math.max(0, pos - 20), pos);
+    const abbrevMatch = before.match(/(^|[\s(])((?:[A-Z]\.)+|[A-Z][a-z]+)\.$/);
+    if (abbrevMatch) {
+      const abbrev = abbrevMatch[2];
+      // Known abbreviations or single/double-letter patterns
+      if (/^(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|viz|ca|cf|al|ibid|op|cit|et|seq|ed|vol|no|pp|pg|fig|eq|ch|sec|dept|est|approx|esp|incl|U\.S|U\.K|Ave|Rd|Blvd)$/i.test(abbrev) ||
+          /^[A-Z](\.[A-Z])*$/.test(abbrev)) {
+        pos = markdown.lastIndexOf('. ', pos - 1);
+        continue;
+      }
+    }
+    // Verify next char is uppercase, digit, or newline (sentence start)
+    const nextChar = markdown[pos + 2];
+    if (nextChar && !/[A-Z0-9\n]/.test(nextChar)) {
+      pos = markdown.lastIndexOf('. ', pos - 1);
+      continue;
+    }
+    break; // valid sentence boundary
+  }
+  return pos;
+}
+
 /**
  * Truncate markdown to a maximum character count.
  * Tries to break at a safe boundary (blank line) to avoid cutting mid-sentence.
@@ -448,8 +488,8 @@ function truncateMarkdown(markdown, maxLength) {
   // Try to break at a blank line boundary first
   let cutoff = markdown.lastIndexOf('\n\n', maxLength);
   if (cutoff < maxLength * 0.6) {
-    // No good blank line — find the last sentence boundary
-    cutoff = markdown.lastIndexOf('. ', maxLength);
+    // No good blank line — find the last sentence boundary (avoids abbreviations)
+    cutoff = findSentenceBoundary(markdown, maxLength);
     if (cutoff < maxLength * 0.5) {
       // No sentence boundary either — break at the last space
       cutoff = markdown.lastIndexOf(' ', maxLength);
@@ -476,20 +516,21 @@ function truncateMarkdown(markdown, maxLength) {
  *   useReadability  — try Readability first, fall back to custom parser.
  *                    Default: false (custom parser only, for backward compat).
  *   maxLength       — truncate output to this many chars. Default: Infinity.
- *   preferReadability — if true, Readability is tried first and custom parser
- *                       is the fallback. Default: true when useReadability is true.
+ *   baseUrl         — original URL of the page, used to resolve relative links.
  */
 export function htmlToMarkdown(html, options = {}) {
   const {
     useReadability = true,
     maxLength = Infinity,
+    baseUrl = 'about:blank',
   } = options;
 
   // Attempt Readability if allowed and available
   if (useReadability) {
-    const rd = extractViaReadability(html, 'https://example.com');
+    const rd = extractViaReadability(html, baseUrl);
     if (rd && rd.content) {
-      const articleMarkdown = htmlToMarkdownFromNode(rd.content, rd.title);
+      const wrapped = `<html><head><title>${rd.title || ''}</title></head><body>${rd.content}</body></html>`;
+      const { content: articleMarkdown } = htmlToMarkdownCustom(wrapped, { title: rd.title, useBodyAsContent: true });
       const { content, truncated, originalLength } = truncateMarkdown(articleMarkdown, maxLength);
       return {
         content,
@@ -499,47 +540,42 @@ export function htmlToMarkdown(html, options = {}) {
         siteName: rd.siteName,
         charCount: originalLength,
         truncated,
-        extractionMethod: 'readability',
       };
     }
   }
 
   // Fall back to custom parser
-  const { content: body, title } = htmlToMarkdownCustom(html);
+  const { content: body, title } = htmlToMarkdownCustom(html, {});
   const { content, truncated, originalLength } = truncateMarkdown(body, maxLength);
   return {
     content,
-    source: 'custom-parser',
+    source: 'custom',
     title,
     byline: null,
     siteName: null,
     charCount: originalLength,
     truncated,
-    extractionMethod: 'custom',
   };
 }
 
 /**
- * Internal: convert any HTML string to markdown using the custom parser.
- * Returns { content, title }.
+ * Internal: convert HTML string to markdown via the custom parser.
+ * @param {string} html - Raw or wrapped HTML
+ * @param {{ title?: string, useBodyAsContent?: boolean }} [opts]
+ * @returns {{ content: string, title: string }}
  */
-function htmlToMarkdownCustom(html) {
+function htmlToMarkdownCustom(html, opts = {}) {
   const root = parse(html);
-  const contentNode = findContentNode(root);
-  const title = findTitle(root);
+  const contentNode = opts.useBodyAsContent
+    ? (root.querySelector('body') || root)
+    : findContentNode(root);
+  const title = opts.title || findTitle(root);
 
   let body = toMarkdown(contentNode);
   body = cleanMarkdown(body);
 
   // Remove duplicate title heading from body
-  if (title) {
-    const escaped = title.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    body = body.replace(new RegExp('^#\\s+' + escaped + '\\n\\n?', 'i'), '');
-    const titlePrefix = title.split(' - ')[0];
-    if (titlePrefix && titlePrefix !== title) {
-      body = body.replace(new RegExp('^#\\s+' + titlePrefix.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\n\\n?', 'i'), '');
-    }
-  }
+  body = stripTitleFromBody(body, title);
 
   return {
     content: title ? '# ' + title + '\n\n' + body : body,
@@ -547,33 +583,16 @@ function htmlToMarkdownCustom(html) {
   };
 }
 
-/**
- * Internal: convert an HTML string (already extracted content) to markdown.
- * Used by the Readability path where we already have clean HTML.
- */
-function htmlToMarkdownFromNode(htmlContent, readabilityTitle) {
-  // Wrap in a minimal document so node-html-parser can parse it
-  const wrapped = `<html><head><title>${readabilityTitle || ''}</title></head><body>${htmlContent}</body></html>`;
-  const root = parse(wrapped);
-
-  // For Readability output, we use body as the content node
-  const body = root.querySelector('body') || root;
-  const title = readabilityTitle || findTitle(root);
-
-  // Readability output is already clean — no need for aggressive noise filtering
-  // but still run through toMarkdown to convert HTML elements to markdown
-  let bodyMarkdown = toMarkdown(body);
-  bodyMarkdown = cleanMarkdown(bodyMarkdown);
-
-  // Remove the title heading since Readability already gives us a clean title
-  if (title) {
-    const escaped = title.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    bodyMarkdown = bodyMarkdown.replace(new RegExp('^#\\s+' + escaped + '\\n\\n?', 'i'), '');
-    const titlePrefix = title.split(' - ')[0];
-    if (titlePrefix && titlePrefix !== title) {
-      bodyMarkdown = bodyMarkdown.replace(new RegExp('^#\\s+' + titlePrefix.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '\\n\\n?', 'i'), '');
-    }
+/** Strip the page title (and its prefix before " - ") if it appears as a heading in the body. */
+function stripTitleFromBody(body, title) {
+  if (!title) return body;
+  const trimmedBody = body.trimStart();
+  const leading = body.length - trimmedBody.length;
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let stripped = trimmedBody.replace(new RegExp('^#\\s+' + escaped + '\\s*\\n*', 'i'), '');
+  const titlePrefix = title.split(' - ')[0];
+  if (titlePrefix && titlePrefix !== title) {
+    stripped = stripped.replace(new RegExp('^#\\s+' + titlePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\n*', 'i'), '');
   }
-
-  return title ? '# ' + title + '\n\n' + bodyMarkdown : bodyMarkdown;
+  return stripped !== trimmedBody ? (leading > 0 ? '\n'.repeat(Math.min(leading, 2)) : '') + stripped : body;
 }
