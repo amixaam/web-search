@@ -15,21 +15,17 @@ That's it — pi discovers the extension and skill automatically. Two tools beco
 - **`web_search`** — query SearXNG, return ranked results
 - **`web_fetch`** — extract full page content from a URL
 
-No `npm link` or root access needed — the extension runs in-process.
-
-**Set your SearXNG URL** (search won't work without it):
+**Set your SearXNG URL**:
 
 ```bash
 export SEARXNG_URL="https://your-searxng-instance"
 ```
 
-Add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist. Or ask pi: *"set SEARXNG_URL in my shell profile"*.
-
-Pi clones the repo, runs `npm install`, and loads the extension + skill. Updates via `pi update`.
+Or add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist. Or ask pi: *"set SEARXNG_URL in my shell profile: {url}"*.
 
 ---
 
-## Standalone CLI
+## Standalone CLI / Skill
 
 ```bash
 git clone https://github.com/amixaam/web-search.git
@@ -54,19 +50,3 @@ Or without linking:
 ```bash
 node index.js '{"fetch": "https://example.com"}'
 ```
-
----
-
-## Configuration
-
-```bash
-export SEARXNG_URL="https://your-searxng-instance"
-```
-
----
-
-## Requirements
-
-- [Node.js](https://nodejs.org) ≥ 18
-- [Pi](https://pi.dev/) (for extension integration)
-- A SearXNG instance (self-hosted or public)
