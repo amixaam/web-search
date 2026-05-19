@@ -12,7 +12,7 @@
 
 import { htmlToMarkdown } from "./extract.js";
 
-const SEARXNG_URL = process.env.SEARXNG_URL || "https://search.amixam.net";
+const SEARXNG_URL = process.env.SEARXNG_URL;
 const MAX_QUANTITY = 20;
 const MAX_PAGES = 3;
 const DEFAULT_MAX_LENGTH = 15_000;
@@ -220,6 +220,11 @@ async function main() {
   const arg = process.argv[2];
   if (!arg) {
     console.error(JSON.stringify({ error: "No input JSON provided" }));
+    process.exit(1);
+  }
+
+  if (!SEARXNG_URL) {
+    console.error(JSON.stringify({ error: "SEARXNG_URL environment variable is not set" }));
     process.exit(1);
   }
 

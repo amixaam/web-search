@@ -2,8 +2,12 @@
   "name": "web-search",
   "version": "1.0.0",
   "type": "module",
+  "keywords": ["pi-package"],
   "bin": {
     "web-search": "./index.js"
+  },
+  "pi": {
+    "skills": ["./SKILL.md"]
   },
   "scripts": {
     "lint": "biome check .",
