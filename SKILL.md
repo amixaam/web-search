@@ -60,19 +60,4 @@ Use `-` to prune noise: `"Horizon game -Forbidden -Zero -Dawn"`
 
 ## Setup (first use only)
 
-Set the SearXNG instance:
-
-```bash
-export SEARXNG_URL="https://your-searxng-instance"
-```
-
-Add to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist across sessions.
-
-## CLI fallback
-
-The `web-search` command still works as a standalone CLI if linked:
-
-```bash
-npm link                        # from the install directory
-web-search '{"queries":"test"}'  # or use node index.js directly
-```
+Ask the user for a SearXNG instance and add to your shell profile (`~/.bashrc`, `~/.zshrc`) to persist across sessions.
