@@ -2,7 +2,7 @@
 node_modules/
 
 # Lock files — tracked for reproducible installs
-# package-lock.json
+# bun.lock
 
 # OS files
 .DS_Store

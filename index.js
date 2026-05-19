@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * Web search via SearXNG and full-page markdown extraction.
  *
@@ -7,7 +7,7 @@
  *   fetch   — extract full content from a single URL (llms.txt → markdown accept → HTML scrape)
  *
  * Categories: "general", "images", "news"
- * Runtime: Bun
+ * Runtime: Node.js
  */
 
 import { htmlToMarkdown } from "./extract.js";
@@ -223,11 +223,6 @@ async function main() {
     process.exit(1);
   }
 
-  if (!SEARXNG_URL) {
-    console.error(JSON.stringify({ error: "SEARXNG_URL environment variable is not set" }));
-    process.exit(1);
-  }
-
   let params;
   try { params = JSON.parse(arg); }
   catch {
@@ -252,6 +247,11 @@ async function main() {
   }
 
   // ── SEARCH MODE ────────────────────────────────────────────────────────────
+  if (!SEARXNG_URL) {
+    console.error(JSON.stringify({ error: "SEARXNG_URL environment variable is not set" }));
+    process.exit(1);
+  }
+
   const { query, queries, quantity = 4, category = "general", time_range } = params;
   const validCategories = ["general", "images", "news"];
   if (!validCategories.includes(category)) {
