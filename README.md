@@ -6,7 +6,7 @@ Search the web via a SearXNG instance. Works as a [pi](https://pi.dev/) extensio
 
 Supports sequential queries, finding llms.txt and HTML parsing into an agent friendly response on fetch.
 
-Only requires a [searXNG](https://github.com/searxng/searxng) instance!
+Only requires a [SearXNG](https://github.com/searxng/searxng) instance!
 
 ---
 
