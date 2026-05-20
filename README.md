@@ -1,6 +1,12 @@
 # Web Search
 
+I got tired of searching for good web search skills that didnt require some api key and money, so i decided to make my own, which used what i already have.
+
 Search the web via a SearXNG instance. Works as a [pi](https://pi.dev/) extension (registers `web_search` and `web_fetch` tools) and a standalone CLI.
+
+Supports sequential queries, finding llms.txt and HTML parsing into an agent friendly response on fetch.
+
+Only requires a [searXNG](https://github.com/searxng/searxng) instance!
 
 ---
 
@@ -10,7 +16,7 @@ Search the web via a SearXNG instance. Works as a [pi](https://pi.dev/) extensio
 pi install https://github.com/amixaam/web-search.git
 ```
 
-That's it — pi discovers the extension and skill automatically. Two tools become available:
+Two tools become available:
 
 - **`web_search`** — query SearXNG, return ranked results
 - **`web_fetch`** — extract full page content from a URL
@@ -21,7 +27,7 @@ That's it — pi discovers the extension and skill automatically. Two tools beco
 export SEARXNG_URL="https://your-searxng-instance"
 ```
 
-Or add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist. Or ask pi: *"set SEARXNG_URL in my shell profile: {url}"*.
+Or add it to your shell profile to make it persist!
 
 ---
 
