@@ -1,6 +1,6 @@
 # Web Search
 
-A [Pi](https://pi.dev/) extension and standalone CLI for source discovery through SearXNG. It returns normalized, deduplicated search results; use Obscura to render and read a selected URL.
+A [Pi](https://pi.dev/) extension and standalone CLI for source discovery through SearXNG. It returns normalized, deduplicated search results.
 
 ## Install for Pi
 
@@ -44,9 +44,3 @@ web-search '{"query":"Responses API", "domains":["platform.openai.com"], "langua
 | `domains` | — | Array of allowed domains; subdomains match. |
 
 The tool strips common tracking parameters, deduplicates URLs, and preserves available engine, publication-date, thumbnail, and image-source metadata.
-
-## Fetch selected pages with Obscura
-
-```bash
-obscura fetch "https://selected-result.example" --wait-until networkidle0 --dump markdown --quiet
-```

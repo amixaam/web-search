@@ -6,12 +6,11 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: 'web_search',
     label: 'Web Search',
-    description:
-      'Search the web through SearXNG and return normalized, deduplicated result URLs. Use Obscura to read a selected URL.',
+    description: 'Search the web through SearXNG and return normalized, deduplicated result URLs.',
     promptSnippet: 'Search the web and return ranked result URLs',
     promptGuidelines: [
       'Use web_search to find current information, documentation, or recent events.',
-      'Use Obscura to render and read a promising result URL; this extension only discovers sources.',
+      'Use the returned result URLs with your preferred page-reading tool.',
     ],
     parameters: Type.Object({
       queries: Type.Union([Type.String(), Type.Array(Type.String())], {

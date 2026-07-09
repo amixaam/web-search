@@ -17,7 +17,7 @@ async function main() {
     fail('Invalid JSON input');
   }
   if (params.fetch || params.deep)
-    fail('Fetching was removed. Use Obscura instead: obscura fetch <url> --dump markdown --quiet');
+    fail('Fetching was removed; this tool only searches for sources.');
 
   const rawQueries = params.queries ?? params.query;
   const queries = Array.isArray(rawQueries) ? rawQueries : [rawQueries];

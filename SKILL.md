@@ -1,12 +1,12 @@
 ---
 name: web-search
-description: "Discover web sources through SearXNG as normalized JSON results. Use Obscura to fetch selected URLs."
+description: "Discover web sources through SearXNG as normalized JSON results."
 user-invocable: true
 ---
 
 # Web Search
 
-Use `web_search` to discover current sources. It does not fetch webpages; use Obscura to render and extract a selected result URL.
+Use `web_search` to discover current sources. It only returns search results and does not fetch webpages.
 
 ## Parameters
 
@@ -21,9 +21,3 @@ Use `web_search` to discover current sources. It does not fetch webpages; use Ob
 | `domains` | — | Domains to include; subdomains match. |
 
 Results include `title`, `url`, and `content`, plus available engine, publication-date, thumbnail, and image-source metadata. URLs are canonicalized and deduplicated.
-
-## Read a selected page
-
-```bash
-obscura fetch "https://selected-result.example" --wait-until networkidle0 --dump markdown --quiet
-```
